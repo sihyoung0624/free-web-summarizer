@@ -1,11 +1,10 @@
 import { OpenAI } from 'openai';
 
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-});
-
 export async function generateSummary(content: string) {
-    const prompt = `
+  const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+  const prompt = `
 당신은 웹페이지 요약 전문가입니다. 아래 본문 내용을 바탕으로 규칙에 맞춰 요약 JSON을 생성하세요.
 
 [규칙]
@@ -34,14 +33,14 @@ export async function generateSummary(content: string) {
 ${content}
 `;
 
-    const response = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [{ role: 'user', content: prompt }],
-        response_format: { type: 'json_object' },
-    });
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [{ role: 'user', content: prompt }],
+    response_format: { type: 'json_object' },
+  });
 
-    const summary = response.choices[0].message.content;
-    if (!summary) throw new Error('요약 생성에 실패했습니다.');
+  const summary = response.choices[0].message.content;
+  if (!summary) throw new Error('요약 생성에 실패했습니다.');
 
-    return JSON.parse(summary);
+  return JSON.parse(summary);
 }
