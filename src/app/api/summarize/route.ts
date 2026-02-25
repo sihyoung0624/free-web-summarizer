@@ -9,8 +9,8 @@ export async function GET() {
     console.log('[API] GET request received for health check');
     return NextResponse.json({
         status: 'ok',
-        version: '1.0.2',
-        message: 'Summary API is ready. Use POST to summarize.'
+        version: '1.0.3',
+        message: 'Summary API is ready.'
     });
 }
 
@@ -18,13 +18,16 @@ export async function POST(req: NextRequest) {
     console.log('[API] POST request started');
     try {
         // 1. IP 기반 레이트리밋 체크
-        const isAllowed = await checkRateLimit(req);
+        let isAllowed = false;
+        try {
+            isAllowed = await checkRateLimit(req);
+        } catch (kvError: any) {
+            console.error('[API] KV Rate Limit Error:', kvError);
+            return NextResponse.json({ error: '저장소 연결 오류 (KV). 환경 변수를 확인해주세요.' }, { status: 500 });
+        }
+
         if (!isAllowed) {
-            console.warn('[API] Rate limit exceeded');
-            return NextResponse.json(
-                { error: '요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.' },
-                { status: 429 }
-            );
+            return NextResponse.json({ error: '요청 한도를 초과했습니다.' }, { status: 429 });
         }
 
         // 2. 입력 URL 검증
@@ -32,74 +35,55 @@ export async function POST(req: NextRequest) {
         try {
             body = await req.json();
         } catch (e) {
-            console.error('[API] JSON parse error');
             return NextResponse.json({ error: '올바르지 않은 요청 형식입니다.' }, { status: 400 });
         }
 
         const { url } = body;
         if (!url || !isValidUrl(url)) {
-            console.warn('[API] Invalid URL provided:', url);
-            return NextResponse.json(
-                { error: '올바른 HTTP/HTTPS URL을 입력해주세요.' },
-                { status: 400 }
-            );
+            return NextResponse.json({ error: '올바른 URL을 입력해주세요.' }, { status: 400 });
         }
 
-        console.log('[API] Fetching content for:', url);
-
-        // 3. 웹페이지 HTML 가져오기 (타임아웃 10초)
+        // 3. 웹페이지 HTML 가져오기
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
 
         const response = await fetch(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            },
+            headers: { 'User-Agent': 'Mozilla/5.0 ...' },
             signal: controller.signal,
         });
-
         clearTimeout(timeout);
 
         if (!response.ok) {
-            console.error('[API] Target fetch failed:', response.status);
-            return NextResponse.json(
-                { error: `웹페이지를 가져오는데 실패했습니다: ${response.statusText}` },
-                { status: response.status }
-            );
+            return NextResponse.json({ error: `페이지 접근 실패: ${response.status}` }, { status: response.status });
         }
 
         let html = await response.text();
-
-        // 메모리 최적화
         html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
             .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
 
         // 4. 본문 추출 및 요약
         const extracted = await extractContent(html, url);
-        console.log('[API] Extraction success, length:', extracted.content.length);
-
         if (extracted.content.length < 100) {
-            return NextResponse.json(
-                { error: '페이지에서 본문 내용을 충분히 찾을 수 없습니다. 본문이 있는 기사 페이지를 시도해 보세요.' },
-                { status: 400 }
-            );
+            return NextResponse.json({ error: '본문 내용이 너무 적습니다.' }, { status: 400 });
         }
 
         const summary = await generateSummary(extracted.content);
 
-        // 5. 공유 ID 생성 및 저장
+        // 5. 저장
         const randomId = Math.random().toString(36).substring(2, 10);
-        await saveSummary(randomId, {
-            url,
-            title: extracted.title,
-            ...summary,
-        });
+        try {
+            await saveSummary(randomId, { url, title: extracted.title, ...summary });
+        } catch (kvSaveError: any) {
+            console.error('[API] KV Save Error:', kvSaveError);
+            // 저장은 실패해도 결과는 보여줍니다.
+        }
 
-        console.log('[API] Success! Summary ID:', randomId);
         return NextResponse.json({ id: randomId, ...summary });
     } catch (error: any) {
         console.error('[API] Fatal Error:', error);
-        const message = error.name === 'AbortError' ? '요청 시간이 초과되었습니다 (10초).' : '요약 처리 중 오류가 생겼습니다.';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return NextResponse.json({
+            error: '서버 내부 오류가 발생했습니다.',
+            details: error.message || 'Unknown error'
+        }, { status: 500 });
     }
 }
