@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isValidUrl, extractContent } from '@/lib/utils';
 import { generateSummary } from '@/lib/openai';
 import { checkRateLimit, saveSummary } from '@/lib/kv';
-import { crypto } from 'crypto';
 
 export async function POST(req: NextRequest) {
     try {
