@@ -20,7 +20,7 @@ export async function GET() {
     console.log('[API] GET request received for health check');
     return NextResponse.json({
         status: 'ok',
-        version: '1.0.4',
+        version: '1.0.5',
         message: 'Summary API is live and ready.'
     });
 }
@@ -34,7 +34,10 @@ export async function POST(req: NextRequest) {
             isAllowed = await checkRateLimit(req);
         } catch (kvError: any) {
             console.error('[API] KV Error:', kvError);
-            return NextResponse.json({ error: '저장소 연결 오류 (KV).' }, { status: 500 });
+            return NextResponse.json({
+                error: '저장소 연결 오류 (KV). 환경 변수 설정을 확인해주세요.',
+                details: kvError.message || 'Unknown KV error'
+            }, { status: 500 });
         }
 
         if (!isAllowed) {
