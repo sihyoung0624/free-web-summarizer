@@ -3,12 +3,19 @@ import { isValidUrl, extractContent } from '@/lib/utils';
 import { generateSummary } from '@/lib/openai';
 import { checkRateLimit, saveSummary } from '@/lib/kv';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
-    return NextResponse.json({ message: 'Summary API is active. Please use POST method to summarize URLs.' });
+    console.log('[API] GET request received for health check');
+    return NextResponse.json({
+        status: 'ok',
+        version: '1.0.2',
+        message: 'Summary API is ready. Use POST to summarize.'
+    });
 }
 
 export async function POST(req: NextRequest) {
-    console.log('[API] POST request received');
+    console.log('[API] POST request started');
     try {
         // 1. IP 기반 레이트리밋 체크
         const isAllowed = await checkRateLimit(req);
@@ -25,19 +32,20 @@ export async function POST(req: NextRequest) {
         try {
             body = await req.json();
         } catch (e) {
-            console.error('[API] Failed to parse request JSON');
+            console.error('[API] JSON parse error');
             return NextResponse.json({ error: '올바르지 않은 요청 형식입니다.' }, { status: 400 });
         }
 
         const { url } = body;
-        console.log(`[API] Processing URL: ${url}`);
-
         if (!url || !isValidUrl(url)) {
+            console.warn('[API] Invalid URL provided:', url);
             return NextResponse.json(
                 { error: '올바른 HTTP/HTTPS URL을 입력해주세요.' },
                 { status: 400 }
             );
         }
+
+        console.log('[API] Fetching content for:', url);
 
         // 3. 웹페이지 HTML 가져오기 (타임아웃 10초)
         const controller = new AbortController();
@@ -53,7 +61,7 @@ export async function POST(req: NextRequest) {
         clearTimeout(timeout);
 
         if (!response.ok) {
-            console.error(`[API] Failed to fetch target URL. Status: ${response.status}`);
+            console.error('[API] Target fetch failed:', response.status);
             return NextResponse.json(
                 { error: `웹페이지를 가져오는데 실패했습니다: ${response.statusText}` },
                 { status: response.status }
@@ -61,19 +69,18 @@ export async function POST(req: NextRequest) {
         }
 
         let html = await response.text();
-        console.log(`[API] Fetched HTML length: ${html.length}`);
 
-        // 메모리 절약을 위해 스크립트 및 스타일 태그 제거
+        // 메모리 최적화
         html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
             .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
 
         // 4. 본문 추출 및 요약
         const extracted = await extractContent(html, url);
-        console.log(`[API] Extracted content length: ${extracted.content.length}`);
+        console.log('[API] Extraction success, length:', extracted.content.length);
 
         if (extracted.content.length < 100) {
             return NextResponse.json(
-                { error: '페이지에서 충분한 정보를 찾을 수 없습니다. 뉴스 기사 같은 본문이 있는 페이지를 입력해 보세요.' },
+                { error: '페이지에서 본문 내용을 충분히 찾을 수 없습니다. 본문이 있는 기사 페이지를 시도해 보세요.' },
                 { status: 400 }
             );
         }
@@ -88,18 +95,11 @@ export async function POST(req: NextRequest) {
             ...summary,
         });
 
-        console.log(`[API] Successfully summarized. ID: ${randomId}`);
+        console.log('[API] Success! Summary ID:', randomId);
         return NextResponse.json({ id: randomId, ...summary });
     } catch (error: any) {
-        console.error('Summary API Error:', error);
-
-        let message = '요약 처리 중 오류가 발생했습니다.';
-        if (error.name === 'AbortError') {
-            message = '요청 시간이 초과되었습니다 (10초).';
-        } else if (error.message) {
-            message = error.message;
-        }
-
+        console.error('[API] Fatal Error:', error);
+        const message = error.name === 'AbortError' ? '요청 시간이 초과되었습니다 (10초).' : '요약 처리 중 오류가 생겼습니다.';
         return NextResponse.json({ error: message }, { status: 500 });
     }
 }
