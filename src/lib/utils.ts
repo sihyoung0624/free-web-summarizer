@@ -3,7 +3,7 @@ import { DOMParser } from 'linkedom';
 
 export async function extractContent(html: string, url: string) {
     const dom = new DOMParser().parseFromString(html, 'text/html');
-    const reader = new Readability(dom);
+    const reader = new Readability(dom as any);
     const article = reader.parse();
 
     if (!article) {
