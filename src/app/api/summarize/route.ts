@@ -43,10 +43,24 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        const html = await response.text();
+        let html = await response.text();
+        console.log(`[API] Fetched HTML length: ${html.length} for URL: ${url}`);
+
+        // 메모리 절약을 위해 스크립트 및 스타일 태그 제거
+        html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+            .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
 
         // 4. 본문 추출 및 요약
         const extracted = await extractContent(html, url);
+        console.log(`[API] Extracted content length: ${extracted.content.length}`);
+
+        if (extracted.content.length < 100) {
+            return NextResponse.json(
+                { error: '페이지에서 충분한 정보를 찾을 수 없습니다. 다른 페이지를 시도해주세요.' },
+                { status: 400 }
+            );
+        }
+
         const summary = await generateSummary(extracted.content);
 
         // 5. 공유 ID 생성 및 저장
@@ -59,8 +73,15 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({ id: randomId, ...summary });
     } catch (error: any) {
-        console.error('Summary Error:', error);
-        const message = error.name === 'AbortError' ? '요청 시간이 초과되었습니다 (10초).' : '요약 처리 중 오류가 발생했습니다.';
+        console.error('Summary API Error:', error);
+
+        let message = '요약 처리 중 오류가 발생했습니다.';
+        if (error.name === 'AbortError') {
+            message = '요청 시간이 초과되었습니다 (10초).';
+        } else if (error.message) {
+            message = error.message;
+        }
+
         return NextResponse.json({ error: message }, { status: 500 });
     }
 }

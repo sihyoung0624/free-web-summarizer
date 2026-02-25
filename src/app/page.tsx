@@ -21,7 +21,15 @@ export default function Home() {
                 body: JSON.stringify({ url }),
             });
 
-            const data = await res.json();
+            const responseText = await res.text();
+            let data;
+
+            try {
+                data = JSON.parse(responseText);
+            } catch (e) {
+                // JSON 파싱 실패 (HTML 에러 페이지 등)
+                throw new Error(`서버 응답 오류 (상태 코드: ${res.status}). 잠시 후 다시 시도해주세요.`);
+            }
 
             if (!res.ok) {
                 throw new Error(data.error || '요약 중 오류가 발생했습니다.');
