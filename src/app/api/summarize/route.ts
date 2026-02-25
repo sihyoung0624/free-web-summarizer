@@ -5,12 +5,23 @@ import { checkRateLimit, saveSummary } from '@/lib/kv';
 
 export const dynamic = 'force-dynamic';
 
+export async function OPTIONS() {
+    return new NextResponse(null, {
+        status: 204,
+        headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        },
+    });
+}
+
 export async function GET() {
     console.log('[API] GET request received for health check');
     return NextResponse.json({
         status: 'ok',
-        version: '1.0.3',
-        message: 'Summary API is ready.'
+        version: '1.0.4',
+        message: 'Summary API is live and ready.'
     });
 }
 
@@ -22,8 +33,8 @@ export async function POST(req: NextRequest) {
         try {
             isAllowed = await checkRateLimit(req);
         } catch (kvError: any) {
-            console.error('[API] KV Rate Limit Error:', kvError);
-            return NextResponse.json({ error: '저장소 연결 오류 (KV). 환경 변수를 확인해주세요.' }, { status: 500 });
+            console.error('[API] KV Error:', kvError);
+            return NextResponse.json({ error: '저장소 연결 오류 (KV).' }, { status: 500 });
         }
 
         if (!isAllowed) {
@@ -48,7 +59,7 @@ export async function POST(req: NextRequest) {
         const timeout = setTimeout(() => controller.abort(), 10000);
 
         const response = await fetch(url, {
-            headers: { 'User-Agent': 'Mozilla/5.0 ...' },
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' },
             signal: controller.signal,
         });
         clearTimeout(timeout);
@@ -64,7 +75,7 @@ export async function POST(req: NextRequest) {
         // 4. 본문 추출 및 요약
         const extracted = await extractContent(html, url);
         if (extracted.content.length < 100) {
-            return NextResponse.json({ error: '본문 내용이 너무 적습니다.' }, { status: 400 });
+            return NextResponse.json({ error: '본문 내용이 적어 요약할 수 없습니다.' }, { status: 400 });
         }
 
         const summary = await generateSummary(extracted.content);
@@ -75,15 +86,14 @@ export async function POST(req: NextRequest) {
             await saveSummary(randomId, { url, title: extracted.title, ...summary });
         } catch (kvSaveError: any) {
             console.error('[API] KV Save Error:', kvSaveError);
-            // 저장은 실패해도 결과는 보여줍니다.
         }
 
         return NextResponse.json({ id: randomId, ...summary });
     } catch (error: any) {
         console.error('[API] Fatal Error:', error);
         return NextResponse.json({
-            error: '서버 내부 오류가 발생했습니다.',
-            details: error.message || 'Unknown error'
+            error: '요청 처리 중 문제가 발생했습니다.',
+            details: error.message
         }, { status: 500 });
     }
 }
