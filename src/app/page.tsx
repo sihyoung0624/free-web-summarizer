@@ -32,7 +32,10 @@ export default function Home() {
             }
 
             if (!res.ok) {
-                throw new Error(data.error || '요약 중 오류가 발생했습니다.');
+                const errorMessage = data.details
+                    ? `${data.error} (${data.details})`
+                    : (data.error || '요약 중 오류가 발생했습니다.');
+                throw new Error(errorMessage);
             }
 
             setResult(data);
