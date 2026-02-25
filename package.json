@@ -1,0 +1,29 @@
+{
+  "name": "web-summary-service",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "openai": "latest",
+    "@vercel/kv": "latest",
+    "@mozilla/readability": "latest",
+    "jsdom": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "typescript": "latest",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@types/mozilla-readability": "latest",
+    "@types/jsdom": "latest"
+  }
+}
