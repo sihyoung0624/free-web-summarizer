@@ -11,7 +11,8 @@ export async function extractContent(html: string, url: string) {
     }
 
     // 텍스트 정규화 및 길이 제한 (20,000자)
-    const cleanContent = article.textContent
+    const content = article.textContent || '';
+    const cleanContent = content
         .replace(/\s+/g, ' ')
         .trim()
         .slice(0, 20000);
